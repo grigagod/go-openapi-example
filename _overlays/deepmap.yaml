@@ -1,8 +1,0 @@
-overlay: 1.0.0
-info:
-  title: Prepare for deepmap generator
-  version: 1.0.0
-actions:
-  - target: "$"
-    update:
-      openapi: "3.0.4"  # Set the desired OpenAPI version
