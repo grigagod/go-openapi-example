@@ -337,6 +337,8 @@ paths:
             security:
                 - OAuth2:
                     - write
+                - OAuth2:
+                    - write
             requestBody:
                 required: true
                 content:
@@ -568,6 +570,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - write
 webhooks:
     newBooking:
         post:

@@ -1,6 +1,7 @@
 generator:
   features:
     enable:
+      - "client/request/options"
       - "ogen/otel"
       - "debug/example_tests"
   content_type_aliases:

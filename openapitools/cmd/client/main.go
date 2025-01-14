@@ -12,8 +12,6 @@ import (
 )
 
 var (
-	serverURL = "localhost:8080"
-	secretKey = "qwerty"
 	passenger = "Jan Kowalski"
 )
 
@@ -22,14 +20,15 @@ func main() {
 	defer cancel()
 
 	cfg := &oas.Configuration{
-		Host:             "",
-		Scheme:           "",
-		DefaultHeader:    map[string]string{},
-		UserAgent:        "",
-		Debug:            false,
-		Servers:          []oas.ServerConfiguration{},
-		OperationServers: map[string]oas.ServerConfigurations{},
-		HTTPClient:       http.DefaultClient,
+		Host:   "127.0.0.1:9093",
+		Scheme: "http",
+		DefaultHeader: map[string]string{
+			"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJzY29wZXMiOlsicmVhZCIsIndyaXRlIl19.ncx4wsxNUl78UiNQ7ThVlHGvEWO_mvTtFnVlx1rS6k0",
+		},
+		UserAgent:  "",
+		Debug:      false,
+		Servers:    []oas.ServerConfiguration{},
+		HTTPClient: http.DefaultClient,
 	}
 	cli := oas.NewAPIClient(cfg)
 
@@ -43,7 +42,7 @@ func main() {
 
 	{
 		req := cli.StationsAPI.
-			GetStations(context.TODO()).
+			GetStations(ctx).
 			Page(1).
 			Limit(2).
 			Country("PL")
@@ -91,7 +90,7 @@ func main() {
 		req := cli.PaymentsAPI.CreateBookingPayment(ctx, bookingID).
 			BookingPayment(oas.BookingPayment{
 				Amount:   oas.PtrFloat32(15.51),
-				Currency: oas.PtrString("PLN"),
+				Currency: oas.PtrString("pln"),
 				Source: &oas.BookingPaymentSource{
 					Card: oas.NewCard(
 						passenger,

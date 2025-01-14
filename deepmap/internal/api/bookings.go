@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	tt "traintravel"
 
 	"deepmap/gen/oas"
 )
@@ -15,7 +16,24 @@ func (h Handler) GetBookings(ctx context.Context, request oas.GetBookingsRequest
 // Create a booking
 // (POST /bookings)
 func (h Handler) CreateBooking(ctx context.Context, request oas.CreateBookingRequestObject) (oas.CreateBookingResponseObject, error) {
-	return oas.CreateBooking201JSONResponse{}, nil
+	if *request.JSONBody.TripId != tt.NextTrip.ID {
+		return &oas.CreateBooking400ApplicationProblemPlusJSONResponse{
+			badRequest("invalid trip ID"),
+		}, nil
+	}
+
+	booking := tt.NewBooking(
+		*request.JSONBody.TripId,
+		*request.JSONBody.PassengerName,
+		*request.JSONBody.HasDog,
+	)
+
+	return oas.CreateBooking201JSONResponse{
+		Id:            &booking.ID,
+		TripId:        &booking.TripID,
+		PassengerName: &booking.PassengerName,
+		HasDog:        &booking.HasDog,
+	}, nil
 }
 
 // Delete a booking

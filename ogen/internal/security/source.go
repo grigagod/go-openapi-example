@@ -2,14 +2,15 @@ package security
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"ogen/gen/oas"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-var ss oas.SecuritySource = Source{}
+var _ oas.SecuritySource = Source{}
 
 type Source struct {
 	SecretKey string
@@ -25,14 +26,17 @@ func (s Source) OAuth2(ctx context.Context, operationName oas.OperationName) (oa
 	}
 
 	now := time.Now()
-	token := jwt.NewWithClaims(&jwt.SigningMethodHMAC{}, &Claims{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &Claims{
 		Scopes: scopes,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: now.Add(time.Hour).Unix(),
-			Id:        now.String(),
-			IssuedAt:  now.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	})
+	ss, err := token.SignedString([]byte(s.SecretKey))
+	if err != nil {
+		return oas.OAuth2{}, fmt.Errorf("cant sign token: %w", err)
+	}
 
-	return oas.OAuth2{Token: token.Raw}, nil
+	return oas.OAuth2{Token: ss, Scopes: scopes}, nil
 }

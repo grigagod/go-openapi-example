@@ -1,4 +1,4 @@
-module github.com/grigagod/go-openapi-example/traintravel
+module traintravel
 
 go 1.22.1
 

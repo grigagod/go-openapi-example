@@ -2,41 +2,29 @@ package security
 
 import (
 	"context"
-	"fmt"
 	"ogen/gen/oas"
-	"slices"
+	tt "traintravel"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var sh oas.SecurityHandler = Handler{}
 
 type Handler struct {
-	SecretKey string
+	secret string
+}
+
+func NewHandler(secret string) Handler {
+	return Handler{
+		secret: secret,
+	}
 }
 
 type Claims struct {
 	Scopes []string
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 func (h Handler) HandleOAuth2(ctx context.Context, _ oas.OperationName, t oas.OAuth2) (context.Context, error) {
-	token, err := jwt.ParseWithClaims(t.Token, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		return []byte(h.SecretKey), nil
-	})
-	if err != nil {
-		return ctx, fmt.Errorf("can't parse token: %w", err)
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return ctx, fmt.Errorf("invalid token")
-	}
-
-	for _, scope := range t.Scopes {
-		if !slices.Contains(claims.Scopes, scope) {
-			return ctx, fmt.Errorf("missing required scope %s", scope)
-		}
-	}
-	return ctx, nil
+	return ctx, tt.HandleOAuth(h.secret, t.Token, t.Scopes)
 }

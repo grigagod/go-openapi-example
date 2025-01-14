@@ -18,8 +18,14 @@ actions:
       security:
         - OAuth2:
             - read
+  - target: "$.paths.*.post"
+    update:
+      security:
+        - OAuth2:
+            - write
 
-  # Want of normal models, got io.Reader
+
+  # Want normal models, got io.Reader
   - target: "$..content['application/xml']"
     remove: true
   - target: "$..content['application/problem+xml']"

@@ -1,4 +1,4 @@
-package client
+package main
 
 import (
 	"context"
@@ -14,16 +14,17 @@ import (
 )
 
 var (
-	serverURL = "localhost:8080"
-	secretKey = "qwerty"
+	url       = "http://127.0.0.1:9093"
+	secret    = "qwerty"
 	passenger = "Jan Kowalski"
+	country   = "PL"
 )
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	cli, err := oas.NewClient(serverURL, security.Source{SecretKey: secretKey})
+	cli, err := oas.NewClient(url, security.Source{SecretKey: secret})
 	if err != nil {
 		panic(err)
 	}
@@ -31,54 +32,78 @@ func main() {
 	var (
 		originID  uuid.UUID
 		destID    uuid.UUID
-		originTZ  *time.Location
+		originTZ  *time.Location = time.UTC
 		tripID    uuid.UUID
 		bookingID uuid.UUID
 	)
 
 	{
-		r, ok := mustCall(cli.GetStations, ctx, oas.GetStationsParams{
+		res, err := cli.GetStations(ctx, oas.GetStationsParams{
 			Page:    oas.NewOptInt(1),
 			Limit:   oas.NewOptInt(2),
-			Country: oas.NewOptString("PL"),
-		}).(*oas.GetStationsOKHeaders)
-		if !ok {
-			panic(r)
+			Country: oas.NewOptString(country),
+		})
+		if err != nil {
+			panic(err)
 		}
-		origin, dest := r.Response.Data[0], r.Response.Data[1]
-		originID, destID = origin.ID, dest.ID
-		originTZ, _ = time.LoadLocation(origin.Timezone.Value)
+		switch r := res.(type) {
+		case *oas.GetStationsOKHeaders:
+			origin, dest := r.Response.Data[0], r.Response.Data[1]
+			originID, destID = origin.ID, dest.ID
+			originTZ, _ = time.LoadLocation(origin.Timezone.Value)
+		default:
+			if err := json.NewEncoder(os.Stderr).Encode(r); err != nil {
+				panic(err)
+			}
+		}
 	}
 
 	{
-		r, ok := mustCall(cli.GetTrips, ctx, oas.GetTripsParams{
+		res, err := cli.GetTrips(ctx, oas.GetTripsParams{
 			Page:        oas.NewOptInt(1),
 			Limit:       oas.NewOptInt(1),
 			Origin:      originID,
 			Destination: destID,
 			Date:        time.Now().In(originTZ),
 			Dogs:        oas.NewOptBool(true),
-		}).(*oas.GetTripsOKHeaders)
-		if !ok {
-			panic(r)
+		})
+		if err != nil {
+			panic(err)
 		}
-		tripID = r.Response.Data[0].ID.Value
+		switch r := res.(type) {
+		case *oas.GetTripsOKHeaders:
+			if len(r.Response.Data) != 0 {
+				tripID = r.Response.Data[0].ID.Value
+			}
+		default:
+			if err := json.NewEncoder(os.Stderr).Encode(r); err != nil {
+				panic(err)
+			}
+		}
 	}
 
 	{
-		r, ok := mustCall(cli.CreateBooking, ctx, &oas.Booking{
+		res, err := cli.CreateBooking(ctx, &oas.Booking{
 			TripID:        oas.NewOptUUID(tripID),
 			PassengerName: oas.NewOptString(passenger),
 			HasDog:        oas.NewOptBool(true),
-		}).(*oas.CreateBookingCreated)
-		if !ok {
-			panic(r)
+		})
+		if err != nil {
+			panic(err)
 		}
-		bookingID = r.ID.Value
+		switch r := res.(type) {
+		case *oas.CreateBookingCreated:
+			bookingID = r.ID.Value
+		default:
+			if err := json.NewEncoder(os.Stderr).Encode(r); err != nil {
+				panic(err)
+			}
+		}
+
 	}
 
 	{
-		res, ok := mustCall2(cli.CreateBookingPayment, ctx,
+		res, err := cli.CreateBookingPayment(ctx,
 			&oas.BookingPayment{
 				Amount:   oas.NewOptFloat64(15.51),
 				Currency: oas.NewOptBookingPaymentCurrency(oas.BookingPaymentCurrencyBam),
@@ -90,35 +115,25 @@ func main() {
 							Cvc:            "777",
 							ExpMonth:       2,
 							ExpYear:        2025,
-							AddressCountry: "PL",
+							AddressCountry: country,
 						},
 					),
 				),
 			}, oas.CreateBookingPaymentParams{
 				BookingId: bookingID,
-			}).(*oas.CreateBookingPaymentOKHeaders)
-		if !ok {
-			panic(res)
+			})
+		if err != nil {
+			panic(err)
 		}
 
-		if err := json.NewEncoder(os.Stdout).Encode(res.Response); err != nil {
+		out := os.Stderr
+		switch res.(type) {
+		case *oas.CreateBookingPaymentOKHeaders:
+			out = os.Stdout
+		default:
+		}
+		if err := json.NewEncoder(out).Encode(res); err != nil {
 			panic(err)
 		}
 	}
-}
-
-func mustCall[In, Out any](inv func(context.Context, In) (Out, error), ctx context.Context, in In) Out {
-	out, err := inv(ctx, in)
-	if err != nil {
-		panic(err)
-	}
-	return out
-}
-
-func mustCall2[In1, In2, Out any](inv func(context.Context, In1, In2) (Out, error), ctx context.Context, in1 In1, in2 In2) Out {
-	out, err := inv(ctx, in1, in2)
-	if err != nil {
-		panic(err)
-	}
-	return out
 }

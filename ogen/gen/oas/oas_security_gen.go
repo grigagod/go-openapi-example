@@ -38,6 +38,9 @@ var oauth2ScopesOAuth2 = map[string][]string{
 	CreateBookingOperation: []string{
 		"write",
 	},
+	CreateBookingPaymentOperation: []string{
+		"write",
+	},
 	DeleteBookingOperation: []string{
 		"write",
 	},

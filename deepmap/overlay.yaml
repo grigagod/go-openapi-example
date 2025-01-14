@@ -18,3 +18,15 @@ actions:
     update:
       links:
         $ref: '#/components/schemas/Links-Booking'
+
+  # Missing paths security
+  - target: "$.paths.*.get"
+    update:
+      security:
+        - OAuth2:
+            - read
+  - target: "$.paths.*.post"
+    update:
+      security:
+        - OAuth2:
+            - write

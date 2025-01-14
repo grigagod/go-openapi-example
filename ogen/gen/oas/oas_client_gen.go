@@ -4,6 +4,7 @@ package oas
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -22,6 +23,57 @@ import (
 	"github.com/ogen-go/ogen/uri"
 )
 
+type requestConfig struct {
+	Client       ht.Client
+	ServerURL    *url.URL
+	EditRequest  func(req *http.Request) error
+	EditResponse func(resp *http.Response) error
+}
+
+func (cfg *requestConfig) setDefaults(c baseClient) {
+	if cfg.Client == nil {
+		cfg.Client = c.cfg.Client
+	}
+}
+
+func (cfg *requestConfig) onRequest(req *http.Request) error {
+	if fn := cfg.EditRequest; fn != nil {
+		return fn(req)
+	}
+	return nil
+}
+
+func (cfg *requestConfig) onResponse(resp *http.Response) error {
+	if fn := cfg.EditResponse; fn != nil {
+		return fn(resp)
+	}
+	return nil
+}
+
+// RequestOption defines options for request.
+type RequestOption func(cfg *requestConfig)
+
+// WithRequestClient sets client for request.
+func WithRequestClient(client ht.Client) RequestOption {
+	return func(cfg *requestConfig) {
+		cfg.Client = client
+	}
+}
+
+// WithEditRequest sets function to edit request.
+func WithEditRequest(fn func(req *http.Request) error) RequestOption {
+	return func(cfg *requestConfig) {
+		cfg.EditRequest = fn
+	}
+}
+
+// WithEditResponse sets function to edit response.
+func WithEditResponse(fn func(resp *http.Response) error) RequestOption {
+	return func(cfg *requestConfig) {
+		cfg.EditResponse = fn
+	}
+}
+
 // Invoker invokes operations described by OpenAPI v3 specification.
 type Invoker interface {
 	// CreateBooking invokes create-booking operation.
@@ -29,45 +81,45 @@ type Invoker interface {
 	// A booking is a temporary hold on a trip. It is not confirmed until the payment is processed.
 	//
 	// POST /bookings
-	CreateBooking(ctx context.Context, request *Booking) (CreateBookingRes, error)
+	CreateBooking(ctx context.Context, request *Booking, options ...RequestOption) (CreateBookingRes, error)
 	// CreateBookingPayment invokes create-booking-payment operation.
 	//
 	// A payment is an attempt to pay for the booking, which will confirm the booking for the user and
 	// enable them to get their tickets.
 	//
 	// POST /bookings/{bookingId}/payment
-	CreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams) (CreateBookingPaymentRes, error)
+	CreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams, options ...RequestOption) (CreateBookingPaymentRes, error)
 	// DeleteBooking invokes delete-booking operation.
 	//
 	// Deletes a booking, cancelling the hold on the trip.
 	//
 	// DELETE /bookings/{bookingId}
-	DeleteBooking(ctx context.Context, params DeleteBookingParams) (DeleteBookingRes, error)
+	DeleteBooking(ctx context.Context, params DeleteBookingParams, options ...RequestOption) (DeleteBookingRes, error)
 	// GetBooking invokes get-booking operation.
 	//
 	// Returns the details of a specific booking.
 	//
 	// GET /bookings/{bookingId}
-	GetBooking(ctx context.Context, params GetBookingParams) (GetBookingRes, error)
+	GetBooking(ctx context.Context, params GetBookingParams, options ...RequestOption) (GetBookingRes, error)
 	// GetBookings invokes get-bookings operation.
 	//
 	// Returns a list of all trip bookings by the authenticated user.
 	//
 	// GET /bookings
-	GetBookings(ctx context.Context, params GetBookingsParams) (GetBookingsRes, error)
+	GetBookings(ctx context.Context, params GetBookingsParams, options ...RequestOption) (GetBookingsRes, error)
 	// GetStations invokes get-stations operation.
 	//
 	// Returns a paginated and searchable list of all train stations.
 	//
 	// GET /stations
-	GetStations(ctx context.Context, params GetStationsParams) (GetStationsRes, error)
+	GetStations(ctx context.Context, params GetStationsParams, options ...RequestOption) (GetStationsRes, error)
 	// GetTrips invokes get-trips operation.
 	//
 	// Returns a list of available train trips between the specified origin and destination stations on
 	// the given date, and allows for filtering by bicycle and dog allowances.
 	//
 	// GET /trips
-	GetTrips(ctx context.Context, params GetTripsParams) (GetTripsRes, error)
+	GetTrips(ctx context.Context, params GetTripsParams, options ...RequestOption) (GetTripsRes, error)
 }
 
 // Client implements OAS client.
@@ -76,10 +128,6 @@ type Client struct {
 	sec       SecuritySource
 	baseClient
 }
-
-var _ Handler = struct {
-	*Client
-}{}
 
 func trimTrailingSlashes(u *url.URL) {
 	u.Path = strings.TrimRight(u.Path, "/")
@@ -105,32 +153,17 @@ func NewClient(serverURL string, sec SecuritySource, opts ...ClientOption) (*Cli
 	}, nil
 }
 
-type serverURLKey struct{}
-
-// WithServerURL sets context key to override server URL.
-func WithServerURL(ctx context.Context, u *url.URL) context.Context {
-	return context.WithValue(ctx, serverURLKey{}, u)
-}
-
-func (c *Client) requestURL(ctx context.Context) *url.URL {
-	u, ok := ctx.Value(serverURLKey{}).(*url.URL)
-	if !ok {
-		return c.serverURL
-	}
-	return u
-}
-
 // CreateBooking invokes create-booking operation.
 //
 // A booking is a temporary hold on a trip. It is not confirmed until the payment is processed.
 //
 // POST /bookings
-func (c *Client) CreateBooking(ctx context.Context, request *Booking) (CreateBookingRes, error) {
+func (c *Client) CreateBooking(ctx context.Context, request *Booking, options ...RequestOption) (CreateBookingRes, error) {
 	res, err := c.sendCreateBooking(ctx, request)
 	return res, err
 }
 
-func (c *Client) sendCreateBooking(ctx context.Context, request *Booking) (res CreateBookingRes, err error) {
+func (c *Client) sendCreateBooking(ctx context.Context, request *Booking, requestOptions ...RequestOption) (res CreateBookingRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("create-booking"),
 		semconv.HTTPRequestMethodKey.String("POST"),
@@ -164,8 +197,18 @@ func (c *Client) sendCreateBooking(ctx context.Context, request *Booking) (res C
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [1]string
 	pathParts[0] = "/bookings"
 	uri.AddPathParts(u, pathParts[:]...)
@@ -198,6 +241,7 @@ func (c *Client) sendCreateBooking(ctx context.Context, request *Booking) (res C
 		nextRequirement:
 			for _, requirement := range []bitset{
 				{0b00000001},
+				{0b00000001},
 			} {
 				for i, mask := range requirement {
 					if satisfied[i]&mask != mask {
@@ -212,12 +256,20 @@ func (c *Client) sendCreateBooking(ctx context.Context, request *Booking) (res C
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeCreateBookingResponse(resp)
@@ -234,12 +286,12 @@ func (c *Client) sendCreateBooking(ctx context.Context, request *Booking) (res C
 // enable them to get their tickets.
 //
 // POST /bookings/{bookingId}/payment
-func (c *Client) CreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams) (CreateBookingPaymentRes, error) {
+func (c *Client) CreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams, options ...RequestOption) (CreateBookingPaymentRes, error) {
 	res, err := c.sendCreateBookingPayment(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendCreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams) (res CreateBookingPaymentRes, err error) {
+func (c *Client) sendCreateBookingPayment(ctx context.Context, request *BookingPayment, params CreateBookingPaymentParams, requestOptions ...RequestOption) (res CreateBookingPaymentRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("create-booking-payment"),
 		semconv.HTTPRequestMethodKey.String("POST"),
@@ -273,8 +325,18 @@ func (c *Client) sendCreateBookingPayment(ctx context.Context, request *BookingP
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [3]string
 	pathParts[0] = "/bookings/"
 	{
@@ -307,12 +369,53 @@ func (c *Client) sendCreateBookingPayment(ctx context.Context, request *BookingP
 		return res, errors.Wrap(err, "encode request")
 	}
 
+	{
+		type bitset = [1]uint8
+		var satisfied bitset
+		{
+			stage = "Security:OAuth2"
+			switch err := c.securityOAuth2(ctx, CreateBookingPaymentOperation, r); {
+			case err == nil: // if NO error
+				satisfied[0] |= 1 << 0
+			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
+				// Skip this security.
+			default:
+				return res, errors.Wrap(err, "security \"OAuth2\"")
+			}
+		}
+
+		if ok := func() bool {
+		nextRequirement:
+			for _, requirement := range []bitset{
+				{0b00000001},
+			} {
+				for i, mask := range requirement {
+					if satisfied[i]&mask != mask {
+						continue nextRequirement
+					}
+				}
+				return true
+			}
+			return false
+		}(); !ok {
+			return res, ogenerrors.ErrSecurityRequirementIsNotSatisfied
+		}
+	}
+
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeCreateBookingPaymentResponse(resp)
@@ -328,12 +431,12 @@ func (c *Client) sendCreateBookingPayment(ctx context.Context, request *BookingP
 // Deletes a booking, cancelling the hold on the trip.
 //
 // DELETE /bookings/{bookingId}
-func (c *Client) DeleteBooking(ctx context.Context, params DeleteBookingParams) (DeleteBookingRes, error) {
+func (c *Client) DeleteBooking(ctx context.Context, params DeleteBookingParams, options ...RequestOption) (DeleteBookingRes, error) {
 	res, err := c.sendDeleteBooking(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendDeleteBooking(ctx context.Context, params DeleteBookingParams) (res DeleteBookingRes, err error) {
+func (c *Client) sendDeleteBooking(ctx context.Context, params DeleteBookingParams, requestOptions ...RequestOption) (res DeleteBookingRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("delete-booking"),
 		semconv.HTTPRequestMethodKey.String("DELETE"),
@@ -367,8 +470,18 @@ func (c *Client) sendDeleteBooking(ctx context.Context, params DeleteBookingPara
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [2]string
 	pathParts[0] = "/bookings/"
 	{
@@ -430,12 +543,20 @@ func (c *Client) sendDeleteBooking(ctx context.Context, params DeleteBookingPara
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeDeleteBookingResponse(resp)
@@ -451,12 +572,12 @@ func (c *Client) sendDeleteBooking(ctx context.Context, params DeleteBookingPara
 // Returns the details of a specific booking.
 //
 // GET /bookings/{bookingId}
-func (c *Client) GetBooking(ctx context.Context, params GetBookingParams) (GetBookingRes, error) {
+func (c *Client) GetBooking(ctx context.Context, params GetBookingParams, options ...RequestOption) (GetBookingRes, error) {
 	res, err := c.sendGetBooking(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendGetBooking(ctx context.Context, params GetBookingParams) (res GetBookingRes, err error) {
+func (c *Client) sendGetBooking(ctx context.Context, params GetBookingParams, requestOptions ...RequestOption) (res GetBookingRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("get-booking"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -490,8 +611,18 @@ func (c *Client) sendGetBooking(ctx context.Context, params GetBookingParams) (r
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [2]string
 	pathParts[0] = "/bookings/"
 	{
@@ -553,12 +684,20 @@ func (c *Client) sendGetBooking(ctx context.Context, params GetBookingParams) (r
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeGetBookingResponse(resp)
@@ -574,12 +713,12 @@ func (c *Client) sendGetBooking(ctx context.Context, params GetBookingParams) (r
 // Returns a list of all trip bookings by the authenticated user.
 //
 // GET /bookings
-func (c *Client) GetBookings(ctx context.Context, params GetBookingsParams) (GetBookingsRes, error) {
+func (c *Client) GetBookings(ctx context.Context, params GetBookingsParams, options ...RequestOption) (GetBookingsRes, error) {
 	res, err := c.sendGetBookings(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendGetBookings(ctx context.Context, params GetBookingsParams) (res GetBookingsRes, err error) {
+func (c *Client) sendGetBookings(ctx context.Context, params GetBookingsParams, requestOptions ...RequestOption) (res GetBookingsRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("get-bookings"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -613,8 +752,18 @@ func (c *Client) sendGetBookings(ctx context.Context, params GetBookingsParams) 
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [1]string
 	pathParts[0] = "/bookings"
 	uri.AddPathParts(u, pathParts[:]...)
@@ -696,12 +845,20 @@ func (c *Client) sendGetBookings(ctx context.Context, params GetBookingsParams) 
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeGetBookingsResponse(resp)
@@ -717,12 +874,12 @@ func (c *Client) sendGetBookings(ctx context.Context, params GetBookingsParams) 
 // Returns a paginated and searchable list of all train stations.
 //
 // GET /stations
-func (c *Client) GetStations(ctx context.Context, params GetStationsParams) (GetStationsRes, error) {
+func (c *Client) GetStations(ctx context.Context, params GetStationsParams, options ...RequestOption) (GetStationsRes, error) {
 	res, err := c.sendGetStations(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendGetStations(ctx context.Context, params GetStationsParams) (res GetStationsRes, err error) {
+func (c *Client) sendGetStations(ctx context.Context, params GetStationsParams, requestOptions ...RequestOption) (res GetStationsRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("get-stations"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -756,8 +913,18 @@ func (c *Client) sendGetStations(ctx context.Context, params GetStationsParams) 
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [1]string
 	pathParts[0] = "/stations"
 	uri.AddPathParts(u, pathParts[:]...)
@@ -890,12 +1057,20 @@ func (c *Client) sendGetStations(ctx context.Context, params GetStationsParams) 
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeGetStationsResponse(resp)
@@ -912,12 +1087,12 @@ func (c *Client) sendGetStations(ctx context.Context, params GetStationsParams) 
 // the given date, and allows for filtering by bicycle and dog allowances.
 //
 // GET /trips
-func (c *Client) GetTrips(ctx context.Context, params GetTripsParams) (GetTripsRes, error) {
+func (c *Client) GetTrips(ctx context.Context, params GetTripsParams, options ...RequestOption) (GetTripsRes, error) {
 	res, err := c.sendGetTrips(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendGetTrips(ctx context.Context, params GetTripsParams) (res GetTripsRes, err error) {
+func (c *Client) sendGetTrips(ctx context.Context, params GetTripsParams, requestOptions ...RequestOption) (res GetTripsRes, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("get-trips"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -951,8 +1126,18 @@ func (c *Client) sendGetTrips(ctx context.Context, params GetTripsParams) (res G
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
-	u := uri.Clone(c.requestURL(ctx))
+	u := c.serverURL
+	if override := reqCfg.ServerURL; override != nil {
+		u = override
+	}
+	u = uri.Clone(u)
 	var pathParts [1]string
 	pathParts[0] = "/trips"
 	uri.AddPathParts(u, pathParts[:]...)
@@ -1110,12 +1295,20 @@ func (c *Client) sendGetTrips(ctx context.Context, params GetTripsParams) (res G
 		}
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeGetTripsResponse(resp)
@@ -1146,12 +1339,12 @@ func NewWebhookClient(opts ...ClientOption) (*WebhookClient, error) {
 //
 // Subscribe to new bookings being created, to update integrations for your users.  Related data is
 // available via the links provided in the request.
-func (c *WebhookClient) NewBooking(ctx context.Context, targetURL string, request *NewBookingReq) error {
+func (c *WebhookClient) NewBooking(ctx context.Context, targetURL string, request *NewBookingReq, options ...RequestOption) error {
 	_, err := c.sendNewBooking(ctx, targetURL, request)
 	return err
 }
 
-func (c *WebhookClient) sendNewBooking(ctx context.Context, targetURL string, request *NewBookingReq) (res *NewBookingOK, err error) {
+func (c *WebhookClient) sendNewBooking(ctx context.Context, targetURL string, request *NewBookingReq, requestOptions ...RequestOption) (res *NewBookingOK, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("new-booking"),
 		otelogen.WebhookName("newBooking"),
@@ -1184,10 +1377,19 @@ func (c *WebhookClient) sendNewBooking(ctx context.Context, targetURL string, re
 		span.End()
 	}()
 
+	var reqCfg requestConfig
+	reqCfg.setDefaults(c.baseClient)
+	for _, o := range requestOptions {
+		o(&reqCfg)
+	}
+
 	stage = "BuildURL"
 	u, err := url.Parse(targetURL)
 	if err != nil {
 		return res, errors.Wrap(err, "parse target URL")
+	}
+	if override := reqCfg.ServerURL; override != nil {
+		u = uri.Clone(override)
 	}
 	trimTrailingSlashes(u)
 
@@ -1200,12 +1402,20 @@ func (c *WebhookClient) sendNewBooking(ctx context.Context, targetURL string, re
 		return res, errors.Wrap(err, "encode request")
 	}
 
+	if err := reqCfg.onRequest(r); err != nil {
+		return res, errors.Wrap(err, "edit request")
+	}
+
 	stage = "SendRequest"
-	resp, err := c.cfg.Client.Do(r)
+	resp, err := reqCfg.Client.Do(r)
 	if err != nil {
 		return res, errors.Wrap(err, "do request")
 	}
 	defer resp.Body.Close()
+
+	if err := reqCfg.onResponse(resp); err != nil {
+		return res, errors.Wrap(err, "edit response")
+	}
 
 	stage = "DecodeResponse"
 	result, err := decodeNewBookingResponse(resp)

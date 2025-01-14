@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"net/http"
+	tt "traintravel"
 
 	"ogen/gen/oas"
 )
@@ -12,7 +14,28 @@ import (
 //
 // POST /bookings
 func (h Handler) CreateBooking(ctx context.Context, req *oas.Booking) (oas.CreateBookingRes, error) {
-	return &oas.CreateBookingCreated{}, nil
+	if req.TripID.Value != tt.NextTrip.ID {
+		return &oas.BadRequestHeaders{
+			Response: oas.Problem{
+				Title:  oas.NewOptString("invalid trip_id"),
+				Status: oas.NewOptInt(http.StatusBadRequest),
+			},
+		}, nil
+	}
+
+	booking := tt.NewBooking(
+		req.TripID.Value,
+		req.PassengerName.Value,
+		req.HasDog.Value,
+	)
+
+	return &oas.CreateBookingCreated{
+		ID:            oas.NewOptUUID(booking.ID),
+		TripID:        oas.NewOptUUID(booking.TripID),
+		PassengerName: oas.NewOptString(booking.PassengerName),
+		HasBicycle:    oas.NewOptBool(booking.HasBicycle),
+		HasDog:        oas.NewOptBool(booking.HasDog),
+	}, nil
 }
 
 // DeleteBooking implements delete-booking operation.

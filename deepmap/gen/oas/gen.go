@@ -2351,6 +2351,8 @@ func (siw *ServerInterfaceWrapper) CreateBooking(w http.ResponseWriter, r *http.
 
 	ctx = context.WithValue(ctx, OAuth2Scopes, []string{"write"})
 
+	ctx = context.WithValue(ctx, OAuth2Scopes, []string{"write"})
+
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2442,7 +2444,7 @@ func (siw *ServerInterfaceWrapper) CreateBookingPayment(w http.ResponseWriter, r
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OAuth2Scopes, []string{"read"})
+	ctx = context.WithValue(ctx, OAuth2Scopes, []string{"write"})
 
 	r = r.WithContext(ctx)
 

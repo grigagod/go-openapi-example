@@ -164,6 +164,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - read
     /trips:
         get:
             summary: Get available train trips
@@ -298,6 +301,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - read
     /bookings:
         get:
             operationId: get-bookings
@@ -373,6 +379,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - read
         post:
             operationId: create-booking
             summary: Create a booking
@@ -380,6 +389,8 @@ paths:
             tags:
                 - Bookings
             security:
+                - OAuth2:
+                    - write
                 - OAuth2:
                     - write
             requestBody:
@@ -488,6 +499,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - read
         delete:
             summary: Delete a booking
             description: Deletes a booking, cancelling the hold on the trip.
@@ -628,6 +642,9 @@ paths:
                     $ref: '#/components/responses/TooManyRequests'
                 '500':
                     $ref: '#/components/responses/InternalServerError'
+            security:
+                - OAuth2:
+                    - write
 webhooks:
     newBooking:
         post:
