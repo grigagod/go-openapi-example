@@ -1,0 +1,7 @@
+generator:
+  features:
+    enable:
+      - "ogen/otel"
+      - "debug/example_tests"
+  content_type_aliases:
+    application/problem+json: application/json

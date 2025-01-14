@@ -1,0 +1,3 @@
+packageName: oas 
+outputAsLibrary: true
+onlyInterfaces: true

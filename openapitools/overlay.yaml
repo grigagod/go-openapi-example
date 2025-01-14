@@ -1,0 +1,28 @@
+overlay: 1.0.0
+info:
+  title: Make openapi-generator happy
+  version: 1.0.0
+actions:
+  # v3.0 migration plan
+
+  - target: "$..parameters..examples"
+    remove: true
+  - target: "$..components.schemas..examples"
+    remove: true
+  - target: "$..components.headers..examples"
+    remove: true
+
+  - target: "$..components.schemas..unevaluatedProperties"
+    remove: true
+
+  - target: "$..components.schemas..exclusiveMaximum"
+    remove: true
+  - target: "$..components.schemas..exclusiveMinimum"
+    remove: true
+
+  # Could be replaced with descriminator
+  - target: "$..components.schemas..const"
+    remove: true
+
+  - target: "$..webhooks"
+    remove: true

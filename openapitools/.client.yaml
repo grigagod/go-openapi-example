@@ -1,0 +1,4 @@
+packageName: oas 
+onlyInterfaces: false
+withGoMod: false
+disallowAdditionalPropertiesIfNotPresent: true

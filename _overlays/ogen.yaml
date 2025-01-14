@@ -1,0 +1,13 @@
+overlay: 1.0.0
+info:
+  title: Prepare for ogen generator
+  version: 1.0.0
+actions:
+  - target: "$..content['application/xml']"
+    remove: true
+  - target: "$..content['application/problem+xml']"
+    remove: true
+  - target: "$..properties..xml"
+    remove: true
+  - target: "$..schemas..xml"
+    remove: true
