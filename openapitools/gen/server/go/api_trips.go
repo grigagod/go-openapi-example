@@ -170,5 +170,5 @@ func (c *TripsAPIController) GetTrips(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }

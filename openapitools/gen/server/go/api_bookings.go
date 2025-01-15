@@ -124,7 +124,7 @@ func (c *BookingsAPIController) GetBookings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }
 
 // CreateBooking - Create a booking
@@ -151,7 +151,7 @@ func (c *BookingsAPIController) CreateBooking(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }
 
 // GetBooking - Get a booking
@@ -169,7 +169,7 @@ func (c *BookingsAPIController) GetBooking(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }
 
 // DeleteBooking - Delete a booking
@@ -187,5 +187,5 @@ func (c *BookingsAPIController) DeleteBooking(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }

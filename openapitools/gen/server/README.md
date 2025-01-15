@@ -19,7 +19,7 @@ To see how to make this your own, look here:
 [README](https://openapi-generator.tech)
 
 - API version: 1.2.0
-- Build date: 2025-01-14T19:37:06.636577891+01:00[Europe/Warsaw]
+- Build date: 2025-01-15T14:50:45.028168818+01:00[Europe/Warsaw]
 - Generator version: 7.9.0
 For more information, please visit [https://example.com/support](https://example.com/support)
 

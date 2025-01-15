@@ -2,9 +2,13 @@ README.md
 api/openapi.yaml
 go/api.go
 go/api_bookings.go
+go/api_bookings_service.go
 go/api_payments.go
+go/api_payments_service.go
 go/api_stations.go
+go/api_stations_service.go
 go/api_trips.go
+go/api_trips_service.go
 go/error.go
 go/helpers.go
 go/impl.go

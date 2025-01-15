@@ -1,3 +1,5 @@
 packageName: oas 
 outputAsLibrary: true
-onlyInterfaces: true
+onlyInterfaces: false
+addResponseHeaders: true
+enumClassPrefix: true

@@ -127,5 +127,5 @@ func (c *StationsAPIController) GetStations(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	_ = EncodeJSONResponse(result.Body, &result.Code, result.Headers, w)
 }
