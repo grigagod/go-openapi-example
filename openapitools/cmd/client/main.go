@@ -49,7 +49,7 @@ func main() {
 
 		res, _, err := cli.StationsAPI.GetStationsExecute(req)
 		if err != nil {
-			panic(err)
+			panic(err.Error())
 		}
 
 		origin, dest := res.Data[0], res.Data[1]

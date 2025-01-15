@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/signal"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"ogen/gen/oas"
 	"ogen/internal/security"
 
+	"github.com/go-faster/jx"
 	"github.com/google/uuid"
 )
 
@@ -126,14 +128,14 @@ func main() {
 			panic(err)
 		}
 
-		out := os.Stderr
-		switch res.(type) {
+		switch r := res.(type) {
 		case *oas.CreateBookingPaymentOKHeaders:
-			out = os.Stdout
+			en := jx.GetEncoder()
+			r.Response.Encode(en)
+			fmt.Fprint(os.Stdout, en)
+			jx.PutEncoder(en)
 		default:
-		}
-		if err := json.NewEncoder(out).Encode(res); err != nil {
-			panic(err)
+			panic(r)
 		}
 	}
 }
